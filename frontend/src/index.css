@@ -1056,3 +1056,65 @@ input {
   font-size: 13px;
   font-weight: 600;
 }
+
+/* MONTHLY BUDGETS */
+.monthly-budget-list {
+  padding: 6px 22px;
+}
+
+.monthly-budget-row {
+  padding: 17px 0;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.monthly-budget-row:last-child {
+  border-bottom: none;
+}
+
+.budget-row-top,
+.budget-row-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.budget-row-top strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.budget-status {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.budget-status.over {
+  color: #dc2626;
+}
+
+.budget-progress {
+  width: 100%;
+  height: 7px;
+  margin: 11px 0 8px;
+  overflow: hidden;
+  background: #e8edf3;
+  border-radius: 999px;
+}
+
+.budget-progress-fill {
+  height: 100%;
+  background: #2563eb;
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+.budget-progress-fill.over {
+  background: #dc2626;
+}
+
+.budget-row-bottom {
+  color: #8a94a6;
+  font-size: 11px;
+}

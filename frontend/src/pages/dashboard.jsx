@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import TransactionModal from "../components/TransactionModal";
 import MonthNavigator from "../components/MonthNavigator";
+import BudgetModal from "../components/BudgetModal";
 
 import {
   PieChart,
@@ -21,16 +22,21 @@ function Dashboard() {
   const [transactions, setTransactions] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-  return (
-    localStorage.getItem("selectedMonth") ||
-    new Date().toISOString().slice(0, 7)
-  );
-});
 
-useEffect(() => {
-  localStorage.setItem("selectedMonth", selectedMonth);
-}, [selectedMonth]);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    return (
+      localStorage.getItem("selectedMonth") ||
+      new Date().toISOString().slice(0, 7)
+    );
+  });
+
+  const [budgets, setBudgets] = useState([]);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(null);
+
+  useEffect(() => {
+    localStorage.setItem("selectedMonth", selectedMonth);
+  }, [selectedMonth]);
 
   useEffect(() => {
     const loadTransactions = async () => {
@@ -44,6 +50,22 @@ useEffect(() => {
 
     loadTransactions();
   }, []);
+
+    const loadBudgets = async () => {
+      try {
+        const response = await api.get(
+          `/budgets?month=${selectedMonth}`
+        );
+
+        setBudgets(response.data);
+      } catch (error) {
+        console.error("Error loading budgets:", error);
+      }
+    };
+
+    useEffect(() => {
+      loadBudgets();
+    }, [selectedMonth]);
 
   // TRANSACCIONES DEL MES SELECCIONADO
   const monthTransactions = transactions.filter((transaction) => {
@@ -225,6 +247,23 @@ const chartColors = [
       response.data.transaction,
       ...currentTransactions,
     ]);
+  };
+
+  const handleDeleteBudget = async (budgetId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this budget?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await api.delete(`/budgets/${budgetId}`);
+      await loadBudgets();
+    } catch (error) {
+      console.error("Error deleting budget:", error);
+    }
   };
 
   const logout = () => {
@@ -516,59 +555,115 @@ const chartColors = [
             </div>
           </div>
 
-          {/* RESUMEN SIMPLE */}
+          {/* PRESUPUESTOS DEL MES */}
           <div className="overview-panel">
             <div className="overview-panel-header">
               <div>
-                <h2>Monthly summary</h2>
-
-                <p>
-                  A quick look at this month.
-                </p>
+                <h2>Monthly budgets</h2>
+                <p>Your spending limits by category.</p>
               </div>
+
+              <button
+                className="overview-view-all"
+                onClick={() => {
+                  setEditingBudget(null);
+                  setIsBudgetModalOpen(true);
+                }}
+              >
+                + Set budget
+              </button>
             </div>
 
-            <div className="monthly-summary-list">
-              <div className="monthly-summary-row">
-                <span>Total income</span>
+            <div className="monthly-budget-list">
+              {budgets.length === 0 ? (
+                <p className="empty-message">
+                  No budgets set for this month.
+                </p>
+              ) : (
+                budgets.map((budget) => {
+                  const spent = Number(
+                    expensesByCategory[budget.category] || 0
+                  );
+                  const budgetAmount = Number(budget.amount);
+                  const percentage =
+                    budgetAmount > 0
+                      ? (spent / budgetAmount) * 100
+                      : 0;
+                  const isOverBudget = spent > budgetAmount;
 
-                <strong className="positive">
-                  $
-                  {totalIncome.toLocaleString(
-                    "es-AR"
-                  )}
-                </strong>
-              </div>
+                  return (
+                    <div
+                      className="monthly-budget-row"
+                      key={budget.id}
+                    >
+                      <div className="budget-row-top">
+                        <strong>{budget.category}</strong>
 
-              <div className="monthly-summary-row">
-                <span>Total expenses</span>
+                        <span
+                          className={
+                            isOverBudget
+                              ? "budget-status over"
+                              : "budget-status"
+                          }
+                        >
+                          ${spent.toLocaleString("es-AR")} / $
+                          {budgetAmount.toLocaleString("es-AR")}
+                        </span>
+                      </div>
 
-                <strong className="negative">
-                  $
-                  {totalExpenses.toLocaleString(
-                    "es-AR"
-                  )}
-                </strong>
-              </div>
+                      <div className="budget-progress">
+                        <div
+                          className={
+                            isOverBudget
+                              ? "budget-progress-fill over"
+                              : "budget-progress-fill"
+                          }
+                          style={{
+                            width: `${Math.min(percentage, 100)}%`,
+                          }}
+                        />
+                      </div>
 
-              <div className="monthly-summary-row">
-                <span>Net result</span>
+                      <div className="budget-row-bottom">
+                        <span>
+                          {percentage.toFixed(0)}% used
+                        </span>
 
-                <strong>
-                  $
-                  {currentBalance.toLocaleString(
-                    "es-AR"
-                  )}
-                </strong>
-              </div>
+                        <span>
+                          {isOverBudget
+                            ? `$${(spent - budgetAmount).toLocaleString(
+                                "es-AR"
+                              )} over budget`
+                            : `$${(budgetAmount - spent).toLocaleString(
+                                "es-AR"
+                              )} remaining`}
+                        </span>
+                      </div>
 
-              <div className="monthly-summary-row">
-                <span>Transactions</span>
+                      <div className="budget-actions">
+                        <button
+                          type="button"
+                          className="table-action-button"
+                          onClick={() => {
+                            setEditingBudget(budget);
+                            setIsBudgetModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </button>
 
-                <strong>
-                  {monthTransactions.length}
-                </strong>
-              </div>
+                        <button
+                          type="button"
+                          className="table-action-button danger"
+                          onClick={() => handleDeleteBudget(budget.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </section>
@@ -667,6 +762,19 @@ const chartColors = [
           editingTransaction={
             editingTransaction
           }
+        />
+      )}
+
+      {isBudgetModalOpen && (
+        <BudgetModal
+          selectedMonth={selectedMonth}
+          editingBudget={editingBudget}
+          existingBudgets={budgets}
+          onClose={() => {
+            setIsBudgetModalOpen(false);
+            setEditingBudget(null);
+          }}
+          onBudgetSaved={loadBudgets}
         />
       )}
     </div>
