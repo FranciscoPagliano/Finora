@@ -218,3 +218,153 @@ exports.updateTransaction = async (req, res) => {
     });
   }
 };
+
+
+ // IMPORTAR TRANSACCIONES DESDE CSV
+exports.importTransactions = async (req, res) => {
+  const userId = req.user.id;
+  const transactions = req.body.transactions;
+
+  if (
+    !Array.isArray(transactions) ||
+    transactions.length === 0 ||
+    transactions.length > 500
+  ) {
+    return res.status(400).json({
+      message: "Debés enviar entre 1 y 500 movimientos.",
+    });
+  }
+
+  const validDate = (value) => {
+    if (typeof value !== "string") return false;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+    const date = new Date(`${value}T00:00:00Z`);
+
+    return (
+      !Number.isNaN(date.getTime()) &&
+      date.toISOString().slice(0, 10) === value
+    );
+  };
+
+  const validated = [];
+
+  for (let i = 0; i < transactions.length; i++) {
+    const transaction = transactions[i];
+
+    if (
+      !transaction ||
+      typeof transaction !== "object" ||
+      Array.isArray(transaction)
+    ) {
+      return res.status(400).json({
+        message: `Fila ${i + 1}: movimiento inválido.`,
+      });
+    }
+
+    const {
+      description,
+      category,
+      type,
+      amount,
+      transactionDate,
+    } = transaction;
+
+    const numericAmount = Number(amount);
+
+    if (
+      typeof description !== "string" ||
+      !description.trim() ||
+      description.length > 255 ||
+      typeof category !== "string" ||
+      !category.trim() ||
+      category.length > 100 ||
+      !["income", "expense"].includes(type) ||
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0 ||
+      numericAmount > 9999999999.99 ||
+      !Number.isInteger(Math.round(numericAmount * 100)) ||
+      !validDate(transactionDate)
+    ) {
+      return res.status(400).json({
+        message: `Fila ${i + 1}: datos inválidos. Revisá fecha, descripción, categoría, tipo y monto.`,
+      });
+    }
+
+    validated.push({
+      description: description.trim(),
+      category: category.trim(),
+      type,
+      amount: numericAmount,
+      transactionDate,
+    });
+  }
+
+  let connection;
+
+  try {
+    connection = await pool.getConnection();
+
+    // Confirmar que todas las categorías pertenezcan al usuario.
+    const [categories] = await connection.query(
+      "SELECT name FROM categories WHERE user_id = ?",
+      [userId]
+    );
+
+    const allowedCategories = new Set(
+      categories.map((category) => category.name)
+    );
+
+    const invalidCategory = validated.find(
+      (transaction) =>
+        !allowedCategories.has(transaction.category)
+    );
+
+    if (invalidCategory) {
+      return res.status(400).json({
+        message: `La categoría "${invalidCategory.category}" no existe en tu cuenta. Creala primero o corregí el CSV.`,
+      });
+    }
+
+    // Todo se guarda o no se guarda nada.
+    await connection.beginTransaction();
+
+    for (const transaction of validated) {
+      await connection.query(
+        `INSERT INTO transactions
+          (user_id, description, category, type, amount, transaction_date)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          userId,
+          transaction.description,
+          transaction.category,
+          transaction.type,
+          transaction.amount,
+          transaction.transactionDate,
+        ]
+      );
+    }
+
+    await connection.commit();
+
+    return res.status(201).json({
+      message: "Importación completada correctamente.",
+      imported: validated.length,
+    });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+
+    console.error("Error importing transactions:", error);
+
+    return res.status(500).json({
+      message: "No se pudieron importar los movimientos.",
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
