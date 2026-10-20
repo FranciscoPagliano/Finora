@@ -1169,3 +1169,129 @@ input {
   align-items: center;
   justify-content: center;
 }
+
+
+/* FINORA - Import success modal */
+
+.finora-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.finora-success-modal {
+  background: #ffffff;
+  width: 100%;
+  max-width: 390px;
+  padding: 36px 30px;
+  border-radius: 18px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+
+.finora-success-icon {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 22px;
+  background: #dcfce7;
+  color: #16a34a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  font-weight: 700;
+}
+
+.finora-success-modal h2 {
+  font-size: 23px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: #0f172a;
+}
+
+.finora-success-modal p {
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 26px;
+}
+
+.finora-success-modal .primary-button {
+  width: 100%;
+  min-height: 44px;
+}
+
+/* FINORA - Confirm import modal */
+
+.finora-confirm-icon {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 22px;
+  background: #dbeafe;
+  color: #2563eb;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.finora-confirm-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.finora-confirm-actions .primary-button,
+.finora-confirm-actions .secondary-button {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+}
+
+
+/* FINORA - Delete transaction modal */
+
+.finora-delete-icon {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 22px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.finora-delete-confirm-button {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #dc2626;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.finora-delete-confirm-button:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.finora-delete-confirm-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

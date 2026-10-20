@@ -48,6 +48,17 @@ const isValidCSVDate = (value) => {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 };
 
+
+const transactionKey = (transaction) =>
+  JSON.stringify([
+    String(transaction.transactionDate).slice(0, 10),
+    transaction.description.trim(),
+    transaction.category.trim(),
+    transaction.type,
+    Number(transaction.amount).toFixed(2),
+  ]);
+
+
 function Transactions() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user"));
@@ -58,6 +69,12 @@ function Transactions() {
   const [importPreview, setImportPreview] = useState([]);
   const [importError, setImportError] = useState("");
   const [importFilename, setImportFilename] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(null);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(() =>
     localStorage.getItem("selectedMonth") || new Date().toISOString().slice(0, 7)
   );
@@ -137,11 +154,112 @@ function Transactions() {
             Number(amount) <= 0 || Number(amount) > 9999999999.99) errors.push("Monto inválido");
         return { date, description, category, type, amount, errors, rowNumber: index + 2 };
       });
-      setImportPreview(preview);
+     
+      // Obtener los movimientos actuales de la base de datos.
+      const response = await api.get("/transactions");
+
+      const categoriesResponse = await api.get("/categories");
+
+      const validCategories = new Set(
+        categoriesResponse.data.map((category) => category.name)
+      );
+
+      const existingKeys = new Set(
+        response.data.map(transactionKey)
+      );
+
+      // Detectar también repetidos dentro del mismo archivo.
+      const csvKeys = new Set();
+      
+
+      
+      const checkedPreview = preview.map((row) => {
+        if (
+      row.errors.length === 0 &&
+      !validCategories.has(row.category.trim())
+    ) {
+      return {
+     ...row,
+      errors: [...row.errors, "Category not found"],
+  };
+      }
+        const key = transactionKey({
+          transactionDate: row.date,
+          description: row.description || "",
+          category: row.category || "",
+          type: row.type,
+          amount: row.amount,
+        });
+
+        const duplicate =
+          row.errors.length === 0 &&
+          (existingKeys.has(key) || csvKeys.has(key));
+
+        if (row.errors.length === 0) {
+          csvKeys.add(key);
+        }
+
+        return {
+          ...row,
+          errors: duplicate
+            ? [...row.errors, "Duplicate"]
+            : row.errors,
+        };
+      });
+
+      setTransactions(response.data);
+      setImportPreview(checkedPreview);
+
     } catch (error) {
       setImportError(error.message || "No se pudo leer el CSV.");
     }
   };
+
+
+  
+const handleConfirmImport = async () => {
+  if (
+    isImporting ||
+    importPreview.length === 0 ||
+    importPreview.some((row) => row.errors.length > 0)
+  ) {
+    return;
+  }
+
+  setIsImporting(true);
+  setImportError("");
+
+  try {
+    const payload = importPreview.map((row) => ({
+      transactionDate: row.date,
+      description: row.description.trim(),
+      category: row.category.trim(),
+      type: row.type,
+      amount: Number(row.amount),
+    }));
+
+    const response = await api.post("/transactions/import", {
+      transactions: payload,
+    });
+
+    const updated = await api.get("/transactions");
+
+    setTransactions(updated.data);
+    setImportPreview([]);
+    setImportFilename("");
+
+   setImportSuccess(response.data.imported ?? payload.length);
+
+  } catch (error) {
+    setImportError(
+      error.response?.data?.message ||
+      "Import failed. Please try again."
+    );
+  } finally {
+    setIsImporting(false);
+  }
+};
+
 
   // Exporta exactamente los movimientos visibles: mes + búsqueda.
   const handleExportCSV = () => {
@@ -193,22 +311,43 @@ function Transactions() {
     setEditingTransaction(null);
   };
 
-  const handleDeleteTransaction = async (transactionId) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this transaction?"
+
+const handleDeleteTransaction = async () => {
+  if (!transactionToDelete || isDeleting) return;
+
+  setIsDeleting(true);
+  setDeleteError("");
+
+  try {
+    await api.delete(`/transactions/${transactionToDelete.id}`);
+
+    setTransactions((currentTransactions) =>
+      currentTransactions.filter(
+        (transaction) => transaction.id !== transactionToDelete.id
+      )
     );
-    if (!confirmed) return;
-    try {
-      await api.delete(`/transactions/${transactionId}`);
-      setTransactions((currentTransactions) =>
-        currentTransactions.filter(
-          (transaction) => transaction.id !== transactionId
-        )
-      );
-    } catch (error) {
-      console.error("Error deleting transaction:", error);
-    }
-  };
+
+    setTransactionToDelete(null);
+  } catch (error) {
+    setDeleteError(
+      error.response?.data?.message ||
+      "Could not delete the transaction. Please try again."
+    );
+  } finally {
+    setIsDeleting(false);
+  }
+};
+
+
+const duplicateCount = importPreview.filter((row) =>
+  row.errors.includes("Duplicate")
+).length;
+
+const errorCount = importPreview.filter((row) =>
+  row.errors.some((error) => error !== "Duplicate")
+).length;
+
+const newCount = importPreview.length - duplicateCount - errorCount;
 
   const logout = () => {
     localStorage.removeItem("token");
@@ -310,7 +449,7 @@ function Transactions() {
             <div className="table-toolbar">
               <div>
                 <h2>CSV preview</h2>
-                <p>{importFilename} — Solo vista previa, todavía no se guarda nada.</p>
+               <p>{importFilename} — Review transactions before importing.</p>
               </div>
               <button className="secondary-button" onClick={() => {
                 setImportPreview([]); setImportError(""); setImportFilename("");
@@ -319,7 +458,12 @@ function Transactions() {
             {importError && <p role="alert" style={{ color: "#b42318" }}>{importError}</p>}
             {importPreview.length > 0 && (
               <>
-                <p>{importPreview.length} movimientos · {importPreview.filter((r) => r.errors.length).length} filas con errores</p>
+                <p style={{ margin: "16px 0", fontSize: "14px", color: "#475569" }}>
+              {importPreview.length} transactions ·{" "}
+              <span style={{ color: "#15803d" }}>{newCount} new</span> ·{" "}
+              <span style={{ color: "#b45309" }}>{duplicateCount} duplicates</span> ·{" "}
+              <span style={{ color: "#dc2626" }}>{errorCount} errors</span>
+                </p>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                     <thead><tr>{["Row", "Date", "Description", "Category", "Type", "Amount", "Status"].map((h) => <th key={h} style={{ padding: 8, borderBottom: "1px solid #ddd" }}>{h}</th>)}</tr></thead>
@@ -330,7 +474,48 @@ function Transactions() {
                     </tr>)}</tbody>
                   </table>
                 </div>
-                <p style={{ marginTop: 12 }}>La confirmación y detección de duplicados las agregamos en el próximo paso.</p>
+
+                
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                className="primary-button"
+                onClick={() => setShowImportConfirm(true)}
+                disabled={isImporting || newCount === 0 || errorCount > 0 || duplicateCount > 0}
+                style={{
+                  opacity: newCount === 0 || errorCount > 0 || duplicateCount > 0 ? 0.45 : 1,
+                  cursor: newCount === 0 || errorCount > 0 || duplicateCount > 0
+                    ? "not-allowed"
+                    : "pointer",
+                }}
+              >
+                {isImporting ? "Importing..." : `Confirm Import (${newCount})`}
+              </button>
+            </div>
+
+            {duplicateCount > 0 && (
+            <p
+              style={{
+                color: "#dc2626",
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: 600,
+                lineHeight: 1.5,
+              }}
+              >
+                {newCount === 0 && errorCount === 0
+                  ? "All transactions in this file are duplicates. Nothing can be imported."
+                  : `${duplicateCount} duplicate transactions detected. Remove duplicates before importing.`}
+              </p>
+            )}
+
+            {errorCount > 0 && (
+              <p style={{ color: "#dc2626", marginTop: 8, fontSize: 13 }}>
+                {errorCount} transactions contain errors. Fix them before importing.
+              </p>
+            )}
+          </div>
+
               </>
             )}
           </section>
@@ -385,8 +570,10 @@ function Transactions() {
                     </button>
                     <button
                       className="delete-button"
-                      onClick={() => handleDeleteTransaction(transaction.id)}
-                    >
+                    onClick={() => {
+                      setDeleteError("");
+                      setTransactionToDelete(transaction);
+                    }}                    >
                       Delete
                     </button>
                   </span>
@@ -396,6 +583,140 @@ function Transactions() {
           </div>
         </section>
       </main>
+
+            
+{showImportConfirm && (
+  <div className="finora-modal-overlay">
+    <div
+      className="finora-success-modal finora-confirm-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-confirm-title"
+    >
+      <div className="finora-confirm-icon">
+        ↑
+      </div>
+
+      <h2 id="import-confirm-title">Confirm import</h2>
+
+      <p>
+        Are you sure you want to import {importPreview.length}{" "}
+        {importPreview.length === 1 ? "transaction" : "transactions"} into FINORA?
+      </p>
+
+      <div className="finora-confirm-actions">
+        <button
+          className="secondary-button"
+          onClick={() => setShowImportConfirm(false)}
+          disabled={isImporting}
+        >
+          Cancel
+        </button>
+
+        <button
+          className="primary-button"
+          onClick={async () => {
+            await handleConfirmImport();
+            setShowImportConfirm(false);
+          }}
+          disabled={isImporting}
+        >
+          {isImporting ? "Importing..." : "Import"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+       
+{importSuccess !== null && (
+  <div className="finora-modal-overlay">
+    <div
+      className="finora-success-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-success-title"
+    >
+      <div className="finora-success-icon">
+        ✓
+      </div>
+
+      <h2 id="import-success-title">Import successful!</h2>
+
+      <p>
+        {importSuccess} {importSuccess === 1 ? "transaction" : "transactions"} imported successfully.
+      </p>
+
+      <button
+        className="primary-button"
+        onClick={() => setImportSuccess(null)}
+      >
+        Continue
+      </button>
+    </div>
+  </div>
+)}
+
+    
+{transactionToDelete && (
+  <div className="finora-modal-overlay">
+    <div
+      className="finora-success-modal finora-delete-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-title"
+    >
+      <div className="finora-delete-icon">
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 6h18M8 6V4h8v2M5 6l1 14h12l1-14M10 10v7M14 10v7" />
+        </svg>
+      </div>
+
+      <h2 id="delete-title">Delete transaction?</h2>
+
+      <p>
+        Are you sure you want to delete{" "}
+        <strong>{transactionToDelete.description}</strong>?
+        This action cannot be undone.
+      </p>
+
+      {deleteError && (
+        <p role="alert" style={{ color: "#dc2626" }}>
+          {deleteError}
+        </p>
+      )}
+
+      <div className="finora-confirm-actions">
+        <button
+          className="secondary-button"
+          disabled={isDeleting}
+          onClick={() => setTransactionToDelete(null)}
+        >
+          Cancel
+        </button>
+
+        <button
+          className="finora-delete-confirm-button"
+          disabled={isDeleting}
+          onClick={handleDeleteTransaction}
+        >
+          {isDeleting ? "Deleting..." : "Delete transaction"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
 
       {isModalOpen && (
         <TransactionModal

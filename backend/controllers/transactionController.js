@@ -330,6 +330,64 @@ exports.importTransactions = async (req, res) => {
     // Todo se guarda o no se guarda nada.
     await connection.beginTransaction();
 
+    
+    // Detectar movimientos repetidos dentro del mismo CSV.
+    const csvKeys = new Set();
+
+    const getKey = (transaction) =>
+      JSON.stringify([
+        transaction.transactionDate,
+        transaction.description.trim(),
+        transaction.category.trim(),
+        transaction.type,
+        Number(transaction.amount).toFixed(2),
+      ]);
+
+    for (const transaction of validated) {
+      const key = getKey(transaction);
+
+      if (csvKeys.has(key)) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          message: "El CSV contiene movimientos repetidos. No se importó nada.",
+        });
+      }
+
+      csvKeys.add(key);
+    }
+
+    // Consultar los movimientos existentes del usuario.
+    const [existingTransactions] = await connection.query(
+      `SELECT
+         description,
+         category,
+         type,
+         amount,
+         DATE_FORMAT(transaction_date, '%Y-%m-%d') AS transactionDate
+       FROM transactions
+       WHERE user_id = ?`,
+      [userId]
+    );
+
+    const existingKeys = new Set(
+      existingTransactions.map(getKey)
+    );
+
+    const duplicates = validated.filter((transaction) =>
+      existingKeys.has(getKey(transaction))
+    );
+
+    if (duplicates.length > 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        message: `Se encontraron ${duplicates.length} movimientos que ya existen. No se importó nada.`,
+        duplicates: duplicates.length,
+      });
+    }
+
+
     for (const transaction of validated) {
       await connection.query(
         `INSERT INTO transactions
