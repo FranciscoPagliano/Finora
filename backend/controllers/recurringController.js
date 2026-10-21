@@ -81,12 +81,14 @@ exports.createRecurring = async (req, res) => {
 
 const anchorDay = Number(next_execution_date.split("-")[2]);
 
+
 const [result] = await db.query(
-  `UPDATE recurring_transactions
-   SET description = ?, category = ?, type = ?, amount = ?,
-       frequency = ?, next_execution_date = ?, anchor_day = ?
-   WHERE id = ? AND user_id = ?`,
+  `INSERT INTO recurring_transactions
+   (user_id, description, category, type, amount,
+    frequency, next_execution_date, anchor_day)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   [
+    req.user.id,
     description.trim(),
     category.trim(),
     type,
@@ -94,8 +96,6 @@ const [result] = await db.query(
     frequency,
     next_execution_date,
     anchorDay,
-    id,
-    req.user.id,
   ]
 );
 
@@ -265,6 +265,8 @@ exports.updateRecurringStatus = async (req, res) => {
     return res.status(500).json({
       message: "Could not update recurring transaction status.",
     });
+
+    
   }
 };
 

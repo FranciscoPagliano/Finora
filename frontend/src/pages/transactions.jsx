@@ -370,6 +370,13 @@ const newCount = importPreview.length - duplicateCount - errorCount;
           <button className="nav-item" onClick={() => navigate("/categories")}>
             Categories
           </button>
+          <button
+        className="nav-item"
+        onClick={() => navigate("/recurring")}
+      >
+        Recurring
+      </button>
+
         </nav>
         <div className="sidebar-bottom">
           <div className="user-info">

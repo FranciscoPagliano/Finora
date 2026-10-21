@@ -148,9 +148,16 @@ function Categories() {
           >
             Transactions
           </button>
-
+          
           <button className="nav-item active">
             Categories
+          </button>
+
+          <button
+            className="nav-item"
+            onClick={() => navigate("/recurring")}
+          >
+            Recurring
           </button>
         </nav>
 

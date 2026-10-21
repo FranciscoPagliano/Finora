@@ -299,6 +299,14 @@ const chartColors = [
           >
             Categories
           </button>
+
+            <button
+        className="nav-item"
+        onClick={() => navigate("/recurring")}
+      >
+        Recurring
+      </button>
+
         </nav>
 
         <div className="sidebar-bottom">
