@@ -6,6 +6,7 @@ const pool = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const budgetRoutes = require("./routes/budgetRoutes");
+const recurringRoutes = require("./routes/recurringRoutes");
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/budgets", budgetRoutes);
+app.use("/api/recurring", recurringRoutes);
 
 app.get("/", async (req, res) => {
   try {
