@@ -7,7 +7,7 @@ const authRoutes = require("./routes/authRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const budgetRoutes = require("./routes/budgetRoutes");
 const recurringRoutes = require("./routes/recurringRoutes");
-
+const { startRecurringScheduler } = require("./services/recurringScheduler");
 dotenv.config();
 
 const app = express();
@@ -47,4 +47,5 @@ app.listen(PORT, () => {
   console.log(
     `Servidor corriendo en http://localhost:${PORT}`
   );
+startRecurringScheduler();
 });

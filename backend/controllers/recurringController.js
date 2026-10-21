@@ -78,20 +78,27 @@ exports.createRecurring = async (req, res) => {
       });
     }
 
-    const [result] = await db.query(
-      `INSERT INTO recurring_transactions
-       (user_id, description, category, type, amount, frequency, next_execution_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.user.id,
-        description.trim(),
-        category.trim(),
-        type,
-        amount,
-        frequency,
-        next_execution_date,
-      ]
-    );
+
+const anchorDay = Number(next_execution_date.split("-")[2]);
+
+const [result] = await db.query(
+  `UPDATE recurring_transactions
+   SET description = ?, category = ?, type = ?, amount = ?,
+       frequency = ?, next_execution_date = ?, anchor_day = ?
+   WHERE id = ? AND user_id = ?`,
+  [
+    description.trim(),
+    category.trim(),
+    type,
+    amount,
+    frequency,
+    next_execution_date,
+    anchorDay,
+    id,
+    req.user.id,
+  ]
+);
+
 
     return res.status(201).json({
       message: "Recurring transaction created successfully.",

@@ -1,7 +1,5 @@
-
 const express = require("express");
 const router = express.Router();
-
 const authMiddleware = require("../middleware/authMiddleware");
 
 const {
@@ -13,7 +11,6 @@ const {
 } = require("../controllers/recurringController");
 
 router.use(authMiddleware);
-
 router.get("/", getRecurring);
 router.post("/", createRecurring);
 router.put("/:id", updateRecurring);
